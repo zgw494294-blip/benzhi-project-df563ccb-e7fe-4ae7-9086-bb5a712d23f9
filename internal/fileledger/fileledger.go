@@ -1,6 +1,7 @@
 package fileledger
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"unicode/utf8"
 
 	"stallsettle/internal/domain"
 )
@@ -129,8 +131,14 @@ func (l *FileLedger) Save(ctx context.Context, snapshot domain.LedgerSnapshot) e
 }
 
 func decode(reader io.Reader, maxBytes int64, target *domain.LedgerSnapshot) error {
-	limited := &io.LimitedReader{R: reader, N: maxBytes + 1}
-	decoder := json.NewDecoder(limited)
+	buffer, err := readBounded(reader, maxBytes)
+	if err != nil {
+		return err
+	}
+	if !utf8.Valid(buffer) {
+		return errors.New("ledger contains invalid UTF-8")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(buffer))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		return err
@@ -142,10 +150,29 @@ func decode(reader io.Reader, maxBytes int64, target *domain.LedgerSnapshot) err
 		}
 		return err
 	}
-	if limited.N <= 0 {
-		return fmt.Errorf("ledger exceeds %d bytes", maxBytes)
-	}
 	return nil
+}
+
+func readBounded(reader io.Reader, maxBytes int64) ([]byte, error) {
+	limited := &io.LimitedReader{R: reader, N: maxBytes + 1}
+	buffer := make([]byte, 0, 4096)
+	chunk := make([]byte, 4096)
+	for {
+		n, readErr := limited.Read(chunk)
+		if n > 0 {
+			buffer = append(buffer, chunk[:n]...)
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return nil, fmt.Errorf("read ledger: %w", readErr)
+		}
+	}
+	if limited.N <= 0 {
+		return nil, fmt.Errorf("ledger exceeds %d bytes", maxBytes)
+	}
+	return buffer, nil
 }
 
 func ensureDirectory(ctx context.Context, directory string) error {
