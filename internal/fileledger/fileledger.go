@@ -104,6 +104,21 @@ func (l *FileLedger) Save(ctx context.Context, snapshot domain.LedgerSnapshot) e
 		return fmt.Errorf("create temporary ledger: %w", err)
 	}
 	temporaryPath := temporary.Name()
+	committed := false
+	defer func() {
+		if committed {
+			return
+		}
+		// Close before removing so the file descriptor is released even on
+		// paths that fail before the explicit Close below.
+		_ = temporary.Close()
+		if removeErr := os.Remove(temporaryPath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			// Cleanup is best-effort: the Save call already reports a more
+			// meaningful error to the caller, and the invariant we must keep
+			// is that no .stallsettle-*.tmp remains in the ledger directory.
+			_ = removeErr
+		}
+	}()
 	if err := contextError(ctx); err != nil {
 		return err
 	}
@@ -119,12 +134,15 @@ func (l *FileLedger) Save(ctx context.Context, snapshot domain.LedgerSnapshot) e
 	if err := temporary.Close(); err != nil {
 		return fmt.Errorf("close temporary ledger: %w", err)
 	}
+	// From here the temporary file is closed; subsequent failures must still
+	// remove it, which the deferred cleanup handles.
 	if err := contextError(ctx); err != nil {
 		return err
 	}
 	if err := os.Rename(temporaryPath, l.path); err != nil {
 		return fmt.Errorf("replace ledger: %w", err)
 	}
+	committed = true
 	return syncDirectory(directory)
 }
 
