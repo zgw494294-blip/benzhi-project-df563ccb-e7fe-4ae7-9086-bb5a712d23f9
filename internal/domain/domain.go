@@ -592,7 +592,24 @@ func (s LedgerSnapshot) Validate() error {
 }
 
 func (c Consignment) Clone() Consignment {
-	return c
+	clone := c
+	if c.Items != nil {
+		clone.Items = make([]ConsignmentItem, len(c.Items))
+		copy(clone.Items, c.Items)
+	}
+	if c.Sales != nil {
+		clone.Sales = make([]SaleEvent, len(c.Sales))
+		copy(clone.Sales, c.Sales)
+	}
+	if c.Receipt != nil {
+		receipt := *c.Receipt
+		if c.Receipt.Lines != nil {
+			receipt.Lines = make([]ReceiptLine, len(c.Receipt.Lines))
+			copy(receipt.Lines, c.Receipt.Lines)
+		}
+		clone.Receipt = &receipt
+	}
+	return clone
 }
 
 func (s LedgerSnapshot) Clone() LedgerSnapshot {
