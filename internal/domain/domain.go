@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -167,23 +166,38 @@ func ParsePriceCents(raw string) (int64, error) {
 	if len(parts) > 2 || parts[0] == "" || (len(parts) == 2 && len(parts[1]) > 2) {
 		return 0, fmt.Errorf("%w: price must use at most two decimal places", ErrValidation)
 	}
-	if _, err := parseDigits(parts[0]); err != nil {
+	whole, err := parseDigits(parts[0])
+	if err != nil {
 		return 0, fmt.Errorf("%w: price must contain digits only", ErrValidation)
 	}
+	fractionCents := int64(0)
 	if len(parts) == 2 {
 		fraction := parts[1]
-		if fraction == "" {
-			fraction = "0"
-		}
-		if _, err := parseDigits(fraction); err != nil {
-			return 0, fmt.Errorf("%w: price must contain digits only", ErrValidation)
+		switch len(fraction) {
+		case 0:
+			fractionCents = 0
+		case 1:
+			digit, digitErr := parseDigits(fraction)
+			if digitErr != nil {
+				return 0, fmt.Errorf("%w: price must contain digits only", ErrValidation)
+			}
+			fractionCents = digit * 10
+		case 2:
+			digit, digitErr := parseDigits(fraction)
+			if digitErr != nil {
+				return 0, fmt.Errorf("%w: price must contain digits only", ErrValidation)
+			}
+			fractionCents = digit
 		}
 	}
-	amount, err := strconv.ParseFloat(value, 64)
-	if err != nil || amount <= 0 || amount > float64(MaxUnitPriceCents)/100 {
+	if whole > (math.MaxInt64-fractionCents)/100 {
 		return 0, fmt.Errorf("%w: price must be positive and within the allowed limit", ErrValidation)
 	}
-	return int64(amount * 100), nil
+	cents := whole*100 + fractionCents
+	if cents <= 0 || cents > MaxUnitPriceCents {
+		return 0, fmt.Errorf("%w: price must be positive and within the allowed limit", ErrValidation)
+	}
+	return cents, nil
 }
 
 func ValidatePriceCents(cents int64) error {
