@@ -479,11 +479,19 @@ func (c Consignment) Validate() error {
 		}
 	}
 	keys := make(map[string]struct{}, len(c.Sales))
-	lastSaleVersion := int64(0)
-	for _, sale := range c.Sales {
+	// Each sale advances the aggregate version by exactly one while the
+	// consignment is active, so the resulting versions must form a contiguous
+	// sequence anchored to the version recorded immediately after activation.
+	// Settling adds one further version bump, which is accounted for below.
+	expectedBase := c.Version - int64(len(c.Sales))
+	if c.State == StateSettled {
+		expectedBase -= 1
+	}
+	for index, sale := range c.Sales {
 		key, err := NormalizeIdempotencyKey(sale.IdempotencyKey)
 		sku, _, skuErr := NormalizeSKU(sale.SKU)
-		if err != nil || key != sale.IdempotencyKey || skuErr != nil || sku != sale.SKU || sale.Quantity <= 0 || sale.RecordedAt.IsZero() || sale.RecordedAt.Before(c.ActivatedAt) || sale.ResultingVersion <= lastSaleVersion || sale.ResultingVersion > c.Version {
+		expectedVersion := expectedBase + int64(index) + 1
+		if err != nil || key != sale.IdempotencyKey || skuErr != nil || sku != sale.SKU || sale.Quantity <= 0 || sale.RecordedAt.IsZero() || sale.RecordedAt.Before(c.ActivatedAt) || sale.ResultingVersion != expectedVersion || sale.ResultingVersion > c.Version {
 			return fmt.Errorf("%w: sale event is invalid", ErrValidation)
 		}
 		if _, exists := keys[key]; exists {
@@ -493,7 +501,6 @@ func (c Consignment) Validate() error {
 		if c.State == StateSettled && sale.RecordedAt.After(c.SettledAt) {
 			return fmt.Errorf("%w: sale occurred after settlement", ErrValidation)
 		}
-		lastSaleVersion = sale.ResultingVersion
 		itemIndex, ok := c.itemBySKU(sale.SKU)
 		if !ok {
 			return fmt.Errorf("%w: sale references unknown sku", ErrValidation)
