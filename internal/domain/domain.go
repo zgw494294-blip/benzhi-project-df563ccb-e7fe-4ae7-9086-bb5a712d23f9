@@ -249,6 +249,9 @@ func (c *Consignment) AddItem(rawSKU, itemName string, quantity, unitPriceCents 
 	if _, ok := c.itemBySKU(sku); ok {
 		return fmt.Errorf("%w: sku already exists", ErrValidation)
 	}
+	if err := c.ensureVersionCanAdvance(); err != nil {
+		return err
+	}
 	c.Items = append(c.Items, ConsignmentItem{SKU: sku, DisplaySKU: displaySKU, Name: name, InitialQuantity: quantity, UnitPriceCents: unitPriceCents})
 	return c.advanceVersion()
 }
@@ -266,6 +269,9 @@ func (c *Consignment) UpdateDetails(sellerName string, commissionBPS int64) erro
 	}
 	if commissionBPS < 0 || commissionBPS > MaxCommissionBPS {
 		return fmt.Errorf("%w: commission must be between 0 and 10000", ErrValidation)
+	}
+	if err := c.ensureVersionCanAdvance(); err != nil {
+		return err
 	}
 	c.SellerName = seller
 	c.CommissionBPS = commissionBPS
@@ -304,6 +310,9 @@ func (c *Consignment) UpdateItem(currentRawSKU, newRawSKU, itemName string, quan
 	if err := ValidatePriceCents(unitPriceCents); err != nil {
 		return err
 	}
+	if err := c.ensureVersionCanAdvance(); err != nil {
+		return err
+	}
 	c.Items[index] = ConsignmentItem{
 		SKU:             newSKU,
 		DisplaySKU:      displaySKU,
@@ -329,6 +338,9 @@ func (c *Consignment) RemoveItem(rawSKU string) error {
 	if !ok {
 		return fmt.Errorf("%w: sku does not exist", ErrNotFound)
 	}
+	if err := c.ensureVersionCanAdvance(); err != nil {
+		return err
+	}
 	copy(c.Items[index:], c.Items[index+1:])
 	c.Items = c.Items[:len(c.Items)-1]
 	return c.advanceVersion()
@@ -346,6 +358,9 @@ func (c *Consignment) Activate(at time.Time) error {
 	}
 	if at.IsZero() || at.Before(c.CreatedAt) {
 		return fmt.Errorf("%w: activation time is invalid", ErrValidation)
+	}
+	if err := c.ensureVersionCanAdvance(); err != nil {
+		return err
 	}
 	c.State = StateActive
 	c.ActivatedAt = at
@@ -614,10 +629,17 @@ func (c *Consignment) itemBySKU(sku string) (int, bool) {
 }
 
 func (c *Consignment) advanceVersion() error {
+	if err := c.ensureVersionCanAdvance(); err != nil {
+		return err
+	}
+	c.Version++
+	return nil
+}
+
+func (c *Consignment) ensureVersionCanAdvance() error {
 	if c.Version == math.MaxInt64 {
 		return fmt.Errorf("%w: version overflow", ErrValidation)
 	}
-	c.Version++
 	return nil
 }
 
