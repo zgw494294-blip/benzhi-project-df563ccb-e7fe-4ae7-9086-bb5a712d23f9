@@ -464,6 +464,7 @@ func (c Consignment) Validate() error {
 		return fmt.Errorf("%w: settlement timestamps are invalid", ErrValidation)
 	}
 	seen := make(map[string]struct{}, len(c.Items))
+	soldBySKU := make(map[string]int64, len(c.Items))
 	for _, item := range c.Items {
 		sku, display, err := NormalizeSKU(item.DisplaySKU)
 		if err != nil || sku != item.SKU || display != item.DisplaySKU {
@@ -473,6 +474,7 @@ func (c Consignment) Validate() error {
 			return fmt.Errorf("%w: duplicate sku", ErrValidation)
 		}
 		seen[item.SKU] = struct{}{}
+		soldBySKU[item.SKU] = 0
 		cleanedName, nameErr := cleanName(item.Name, "item name")
 		if nameErr != nil || cleanedName != item.Name || item.InitialQuantity <= 0 || item.InitialQuantity > MaxQuantity || item.SoldQuantity < 0 || item.SoldQuantity > item.InitialQuantity || ValidatePriceCents(item.UnitPriceCents) != nil {
 			return fmt.Errorf("%w: item values are invalid", ErrValidation)
@@ -502,6 +504,15 @@ func (c Consignment) Validate() error {
 		gross, grossErr := ComputeLineCents(item.UnitPriceCents, sale.Quantity)
 		if grossErr != nil || gross != sale.GrossCents {
 			return fmt.Errorf("%w: sale amount is inconsistent", ErrValidation)
+		}
+		if soldBySKU[sale.SKU] > math.MaxInt64-sale.Quantity {
+			return fmt.Errorf("%w: sold quantity total overflow", ErrValidation)
+		}
+		soldBySKU[sale.SKU] += sale.Quantity
+	}
+	for _, item := range c.Items {
+		if soldBySKU[item.SKU] != item.SoldQuantity {
+			return fmt.Errorf("%w: item sold quantity does not match sale history", ErrValidation)
 		}
 	}
 	if c.State == StateDraft && len(c.Sales) != 0 {
