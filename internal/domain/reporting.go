@@ -188,13 +188,6 @@ func (c Consignment) PreviewSettlement(at time.Time) (SettlementPreview, error) 
 		if err := addTo(&preview.GrossCents, position.SalesCents, "settlement gross amount"); err != nil {
 			return SettlementPreview{}, err
 		}
-		lineCommission, err := ComputeCommission(position.SalesCents, c.CommissionBPS)
-		if err != nil {
-			return SettlementPreview{}, err
-		}
-		if err := addTo(&preview.CommissionCents, lineCommission, "settlement commission amount"); err != nil {
-			return SettlementPreview{}, err
-		}
 		if err := addTo(&preview.ReturnedQuantity, position.RemainingQuantity, "returned quantity"); err != nil {
 			return SettlementPreview{}, err
 		}
@@ -208,6 +201,11 @@ func (c Consignment) PreviewSettlement(at time.Time) (SettlementPreview, error) 
 			SalesCents:       position.SalesCents,
 		})
 	}
+	commission, err := ComputeCommission(preview.GrossCents, c.CommissionBPS)
+	if err != nil {
+		return SettlementPreview{}, err
+	}
+	preview.CommissionCents = commission
 	preview.SellerPayoutCents = preview.GrossCents - preview.CommissionCents
 	return preview, nil
 }
