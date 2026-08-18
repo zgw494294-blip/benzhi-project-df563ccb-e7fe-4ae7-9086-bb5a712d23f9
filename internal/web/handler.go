@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"encoding/json"
@@ -276,7 +277,11 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
 	if err != nil || mediaType != "application/json" {
 		return errors.New("请求内容类型必须是 application/json")
 	}
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxRequestBytes))
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxRequestBytes))
+	if err != nil {
+		return errors.New("请求内容格式不正确")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
 		if errors.Is(err, io.EOF) {
@@ -288,7 +293,72 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
 	if err := decoder.Decode(&trailing); err != io.EOF {
 		return errors.New("请求内容只能包含一个 JSON 对象")
 	}
+	if duplicate, err := hasDuplicateJSONFields(body); err != nil || duplicate {
+		return errors.New("请求内容格式不正确")
+	}
 	return nil
+}
+
+func hasDuplicateJSONFields(data []byte) (bool, error) {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	return scanJSONValue(decoder)
+}
+
+func scanJSONValue(decoder *json.Decoder) (bool, error) {
+	token, err := decoder.Token()
+	if err != nil {
+		return false, err
+	}
+	delim, isDelim := token.(json.Delim)
+	if !isDelim {
+		return false, nil
+	}
+	switch delim {
+	case '{':
+		seen := make(map[string]struct{})
+		for decoder.More() {
+			keyToken, err := decoder.Token()
+			if err != nil {
+				return false, err
+			}
+			key, ok := keyToken.(string)
+			if !ok {
+				return false, errors.New("JSON 对象字段名无效")
+			}
+			if _, exists := seen[key]; exists {
+				return true, nil
+			}
+			seen[key] = struct{}{}
+			duplicate, err := scanJSONValue(decoder)
+			if err != nil || duplicate {
+				return duplicate, err
+			}
+		}
+		end, err := decoder.Token()
+		if err != nil {
+			return false, err
+		}
+		if end != json.Delim('}') {
+			return false, errors.New("JSON 对象结束符无效")
+		}
+	case '[':
+		for decoder.More() {
+			duplicate, err := scanJSONValue(decoder)
+			if err != nil || duplicate {
+				return duplicate, err
+			}
+		}
+		end, err := decoder.Token()
+		if err != nil {
+			return false, err
+		}
+		if end != json.Delim(']') {
+			return false, errors.New("JSON 数组结束符无效")
+		}
+	default:
+		return false, errors.New("JSON 分隔符无效")
+	}
+	return false, nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
