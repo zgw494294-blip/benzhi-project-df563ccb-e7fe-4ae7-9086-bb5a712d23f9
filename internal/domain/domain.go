@@ -424,14 +424,12 @@ func (c *Consignment) BuildReceipt(at time.Time) (SettlementReceipt, error) {
 }
 
 func (c Consignment) FindSale(key string) (SaleEvent, bool) {
-	if len(c.Sales) == 0 {
-		return SaleEvent{}, false
+	for index := len(c.Sales) - 1; index >= 0; index-- {
+		if c.Sales[index].IdempotencyKey == key {
+			return c.Sales[index], true
+		}
 	}
-	latest := c.Sales[len(c.Sales)-1]
-	if latest.IdempotencyKey != key {
-		return SaleEvent{}, false
-	}
-	return latest, true
+	return SaleEvent{}, false
 }
 
 func (c Consignment) Validate() error {
