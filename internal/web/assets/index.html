@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#17253a">
+  <title>StallSettle / 寄售工作台</title>
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="返回寄售工作台">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span><strong>StallSettle</strong><small>寄售工作台</small></span>
+      </a>
+      <div class="topbar-meta">
+        <span class="connection-dot" aria-hidden="true"></span>
+        <span>本地账本已连接</span>
+        <span class="date-stamp" id="today-label"></span>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <section class="intro-row">
+        <div>
+          <p class="eyebrow">社区市集 · 寄售管理</p>
+          <h1>寄售工作台</h1>
+          <p class="intro-copy">从建档、上架到结算，今天的每一笔交易都在这里留下清晰凭据。</p>
+        </div>
+        <div class="ledger-note" aria-label="账本状态">
+          <span class="ledger-note-label">当前账本</span>
+          <strong>本地 · 原子保存</strong>
+          <span>每次提交后立即保存</span>
+        </div>
+      </section>
+
+      <section class="metrics" aria-label="寄售概览">
+        <div class="metric-item"><span class="metric-label">寄售单</span><strong id="metric-total">—</strong><span class="metric-sub">全部记录</span></div>
+        <div class="metric-item"><span class="metric-label">进行中</span><strong id="metric-active">—</strong><span class="metric-sub">正在销售</span></div>
+        <div class="metric-item"><span class="metric-label">已结算</span><strong id="metric-settled">—</strong><span class="metric-sub">凭据已锁定</span></div>
+        <div class="metric-item metric-highlight"><span class="metric-label">本页状态</span><strong id="metric-state">准备开始</strong><span class="metric-sub" id="metric-version">等待选择寄售单</span></div>
+      </section>
+
+      <section class="workspace-grid">
+        <div class="primary-column">
+          <section class="panel panel-main" id="workspace-panel">
+            <div class="panel-heading">
+              <div><p class="section-kicker">当前寄售单</p><h2 id="workspace-title">建立一份寄售单</h2></div>
+              <span class="state-pill state-draft" id="state-pill">草稿</span>
+            </div>
+            <div id="workspace-content"></div>
+          </section>
+        </div>
+        <aside class="secondary-column">
+          <section class="panel selection-panel">
+            <div class="panel-heading compact"><div><p class="section-kicker">账本索引</p><h2>寄售单索引</h2></div><button class="icon-button" id="refresh-button" type="button" title="刷新寄售单" aria-label="刷新寄售单"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0-14.9-3M4 5v4h4M4 13a8.1 8.1 0 0 0 14.9 3M20 19v-4h-4"/></svg></button></div>
+            <form class="list-filters" id="list-filters" role="search">
+              <label class="sr-only" for="list-query">搜索寄售单</label>
+              <input id="list-query" type="search" maxlength="200" placeholder="搜索摊主、编号或商品">
+              <div class="filter-row">
+                <label class="sr-only" for="list-state">按状态筛选</label>
+                <select id="list-state"><option value="">全部状态</option><option value="draft">草稿</option><option value="active">销售中</option><option value="settled">已结算</option></select>
+                <label class="sr-only" for="list-sort">排序方式</label>
+                <select id="list-sort"><option value="newest">最近建立</option><option value="oldest">最早建立</option><option value="seller">摊主名称</option></select>
+              </div>
+            </form>
+            <div class="consignment-list" id="consignment-list"></div>
+          </section>
+          <section class="quick-note">
+            <span class="note-symbol" aria-hidden="true">+</span>
+            <div><strong>按分结算</strong><p>金额使用整数分计算，佣金按万分比四舍五入。</p></div>
+          </section>
+        </aside>
+      </section>
+    </main>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </div>
+  <script src="/assets/app.js"></script>
+</body>
+</html>
