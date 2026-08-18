@@ -104,6 +104,13 @@ func (l *FileLedger) Save(ctx context.Context, snapshot domain.LedgerSnapshot) e
 		return fmt.Errorf("create temporary ledger: %w", err)
 	}
 	temporaryPath := temporary.Name()
+	committed := false
+	defer func() {
+		if !committed {
+			_ = temporary.Close()
+			_ = os.Remove(temporaryPath)
+		}
+	}()
 	if err := contextError(ctx); err != nil {
 		return err
 	}
@@ -125,6 +132,7 @@ func (l *FileLedger) Save(ctx context.Context, snapshot domain.LedgerSnapshot) e
 	if err := os.Rename(temporaryPath, l.path); err != nil {
 		return fmt.Errorf("replace ledger: %w", err)
 	}
+	committed = true
 	return syncDirectory(directory)
 }
 
